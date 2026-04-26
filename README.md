@@ -1,73 +1,258 @@
-# Welcome to your Lovable project
+# 🚀 NextGen Finance Frontend
 
-## Project info
+A modern, responsive **React-based financial dashboard** with a beautiful UI powered by **shadcn/ui**, **Radix UI**, and **Tailwind CSS**. Built with **Vite** for blazing-fast development and production builds.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+---
 
-## How can I edit this code?
+## ✨ Features
 
-There are several ways of editing your application.
+### 🔹 Dashboard & Analytics
 
-**Use Lovable**
+* 📊 **Interactive Charts & Graphs**
+  Real-time visualization of financial data using Recharts
+  
+* 💰 **Transaction Overview**
+  Display income, expenses, and balance at a glance
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+* 📈 **Category-wise Breakdown**
+  Visual representation of spending by category
 
-Changes made via Lovable will be committed automatically to this repo.
+* 🎯 **Budget Tracking**
+  Monitor budgets and get spending alerts
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### 🔹 UI Components (shadcn/ui)
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+* 🎨 **Pre-built Components**
+  Accordion, Dialog, Dropdown, Tabs, Toast notifications, etc.
 
-Follow these steps:
+* 🎭 **Dark Mode Support**
+  Seamless theme switching with next-themes
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+* ♿ **Accessible Design**
+  Built with Radix UI for WCAG compliance
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+* ⚡ **Performance Optimized**
+  Lazy loading and code splitting
 
-# Step 3: Install the necessary dependencies.
-npm i
+---
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 🔹 Forms & Validation
+
+* ✅ **React Hook Form Integration**
+  Efficient form handling with minimal re-renders
+
+* 🛡️ **Zod Validation**
+  Type-safe schema validation
+
+* 📝 **Rich Input Components**
+  Date pickers, selects, checkboxes, radio buttons
+
+---
+
+### 🔹 Data Management
+
+* 🔄 **React Query (TanStack Query)**
+  Server state management and caching
+
+* 📡 **Axios Integration**
+  HTTP client for API communication
+
+* 🔗 **Socket.IO Support**
+  Real-time updates and notifications
+
+---
+
+## 🧱 Project Structure
+
+```
+/src
+  /components      # Reusable React components
+  /pages           # Page components & routes
+  /context         # React Context for state management
+  /hooks           # Custom React hooks
+  /utils           # Helper functions & utilities
+  /lib             # Third-party library configurations
+  /data            # Mock/static data
+  /test            # Test files
+
+/public            # Static assets
+
+App.jsx            # Main app component
+main.jsx           # Entry point
+index.css          # Global styles
+```
+
+---
+
+## ⚙️ Setup
+
+### Prerequisites
+
+* Node.js >= 18 (install with [nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
+* npm or yarn
+
+### Installation
+
+```bash
+# Step 1: Clone the repository
+git clone https://github.com/AyushGamer55/nextgen-finance-frontend.git
+
+# Step 2: Navigate to the project directory
+cd nextgen-finance-frontend
+
+# Step 3: Install dependencies
+npm install
+```
+
+### Environment Configuration
+
+Create a `.env` file in the root directory:
+
+```env
+VITE_API_URL=http://localhost:5000
+VITE_SOCKET_URL=http://localhost:5000
+```
+
+### Running Development Server
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Server starts at: `http://localhost:5173`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## 🏗️ Development
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Available Scripts
 
-## What technologies are used for this project?
+```bash
+# Start development server with hot reload
+npm run dev
 
-This project is built with:
+# Build for production
+npm run build
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+# Build for development mode
+npm run build:dev
 
-## How can I deploy this project?
+# Preview production build locally
+npm run preview
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+# Run linting
+npm lint
 
-## Can I connect a custom domain to my Lovable project?
+# Run unit tests
+npm run test
 
-Yes, you can!
+# Run tests in watch mode
+npm run test:watch
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+---
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 🛠 Tech Stack
+
+* **Frontend Framework:** React 18+
+* **Language:** TypeScript
+* **Build Tool:** Vite
+* **UI Components:** shadcn/ui, Radix UI
+* **Styling:** Tailwind CSS
+* **Form Management:** React Hook Form
+* **Validation:** Zod
+* **State Management:** React Context + React Query
+* **HTTP Client:** Axios
+* **Real-time:** Socket.IO Client
+* **Charts:** Recharts
+* **Theme:** next-themes
+* **Testing:** Vitest, React Testing Library
+* **Linting:** ESLint
+
+---
+
+## 📊 API Integration
+
+The frontend communicates with the backend API at the configured `VITE_API_URL`:
+
+```javascript
+// Example API calls
+GET  /api/analysis/:userId       # Fetch financial analysis
+POST /api/upload                 # Upload CSV for analysis
+GET  /api/transactions           # Get transactions
+POST /api/budget                 # Create/update budget
+```
+
+---
+
+## 🧪 Testing
+
+Run unit tests:
+
+```bash
+npm run test
+```
+
+Watch mode for development:
+
+```bash
+npm run test:watch
+```
+
+---
+
+## 🚀 Building & Deployment
+
+### Production Build
+
+```bash
+npm run build
+```
+
+Generates optimized files in the `dist/` directory.
+
+### Preview Production Build
+
+```bash
+npm run preview
+```
+
+### Deployment Options
+
+* **Vercel:** Connect GitHub repo directly
+* **Netlify:** Connect GitHub repo with build command `npm run build`
+* **Docker:** Use provided Dockerfile for containerization
+* **Traditional Hosting:** Deploy `dist/` folder to any static host
+
+---
+
+## ⚠️ Notes
+
+* Frontend is **fully typed with TypeScript** for better developer experience
+* **Responsive design** works seamlessly on mobile, tablet, and desktop
+* Designed to work with the **NextGen Finance Backend** (Node.js + MongoDB)
+* Requires backend server running for full functionality
+
+---
+
+## 🚀 Future Improvements
+
+* 🔐 Enhanced authentication UI (MFA, biometric login)
+* 📊 Advanced data visualization & custom reports
+* 📱 Mobile app version with React Native
+* 🤖 AI-powered financial recommendations
+* 💬 Real-time notifications system
+* 🌐 Multi-language support (i18n)
+* 📈 Advanced charting library integration
+
+---
+
+## ⭐ Status
+
+✔ Frontend UI fully functional
+✔ Component library integrated
+✔ Form validation working
+✔ Backend integration is completed
+🚧 Real-time features being added.
