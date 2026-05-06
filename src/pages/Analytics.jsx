@@ -1,7 +1,9 @@
-﻿import { useLayoutEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Line,
   LineChart,
@@ -30,6 +32,7 @@ import {
 } from "@/lib/finance.js";
 import { buildInsights } from "@/lib/insights.js";
 import { formatCurrency } from "@/utils/dashboardUtils.js";
+import { useMlInsights } from "@/context/MlInsightsContext";
 
 const PIE_COLORS = [
   "hsl(177 70% 54%)",
@@ -57,6 +60,7 @@ const ChartTip = ({ active, payload, label }) => {
 
 const Analytics = () => {
   const { transactions, monthlyBarsForYear } = useFinance();
+  const { monthlyDataset, predictionSummary, currentFeatures } = useMlInsights();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(String(currentYear));
   const [search, setSearch] = useState("");
@@ -89,6 +93,30 @@ const Analytics = () => {
 
   const insights = useMemo(() => buildInsights(yearTx), [yearTx]);
   const hasActivity = useMemo(() => yearTx.some((tx) => parseTxDate(tx.date)), [yearTx]);
+  const mlSeries = useMemo(
+    () => (monthlyDataset || []).map((row) => ({
+      month: row.month?.slice(5) || row.month,
+      forecastExpense: Number(row.expenses || 0),
+      savings: Number(row.savings || 0),
+      healthScore: Number(row.financialHealthScore || 0),
+      discretionarySharePct: Number((row.discretionaryShare || 0) * 100),
+      recurringBurdenPct: Number((row.recurringExpenseBurden || 0) * 100),
+    })),
+    [monthlyDataset]
+  );
+  const nextMonthForecast = Number(predictionSummary?.predicted_expense || 0);
+  const riskLabel = String(predictionSummary?.overspending_risk || "Unknown");
+  const riskTone = /high/i.test(riskLabel) ? "text-red-400" : /medium/i.test(riskLabel) ? "text-amber-400" : "text-emerald-500";
+  const healthScore = Number(predictionSummary?.monthly_health_score || currentFeatures?.financialHealthScore || 0);
+  const anomalyDetected = Boolean(predictionSummary?.anomaly_detected || currentFeatures?.anomaly);
+  const anomalyScore = Number(predictionSummary?.anomaly_score || currentFeatures?.anomalyScore || 0);
+  const categoryPressureData = useMemo(() => {
+    if (!summary.totalExpenses) return [];
+    return summary.categoryExpensePie.slice(0, 6).map((row) => ({
+      name: row.name,
+      share: Number(((row.value / summary.totalExpenses) * 100).toFixed(1)),
+    }));
+  }, [summary]);
 
   const spendChange = useMemo(() => {
     if (String(year) !== String(currentYear)) return null;
@@ -152,6 +180,31 @@ const Analytics = () => {
           <InsightsPanel insights={insights} compact title={`Insights | ${year}`} />
         </div>
 
+        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
+          <div className="stat-card">
+            <p className="text-sm text-muted-foreground">Overspending risk</p>
+            <p className={`mt-1 text-2xl font-bold ${riskTone}`}>{riskLabel}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Confidence: {Number(predictionSummary?.confidence || 0)}%</p>
+          </div>
+          <div className="stat-card">
+            <p className="text-sm text-muted-foreground">Monthly health score</p>
+            <p className="mt-1 text-2xl font-bold">{Math.round(healthScore)}/100</p>
+            <p className="mt-2 text-xs text-muted-foreground">Based on savings quality and spending pressure.</p>
+          </div>
+          <div className="stat-card">
+            <p className="text-sm text-muted-foreground">Next month forecast</p>
+            <p className="mt-1 text-2xl font-bold">{formatCurrency(nextMonthForecast)}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Derived from your real transaction behavior.</p>
+          </div>
+          <div className="stat-card">
+            <p className="text-sm text-muted-foreground">Expense anomaly</p>
+            <p className={`mt-1 text-2xl font-bold ${anomalyDetected ? "text-red-400" : "text-emerald-500"}`}>
+              {anomalyDetected ? "Detected" : "Normal"}
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">Score: {(anomalyScore * 100).toFixed(0)}%</p>
+          </div>
+        </div>
+
         <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="stat-card">
             <h3 className="mb-4 text-lg font-semibold">Income vs spending by month</h3>
@@ -206,6 +259,79 @@ const Analytics = () => {
               </LineChart>
             </ResponsiveContainer>
           )}
+        </div>
+
+        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="stat-card">
+            <h3 className="mb-4 text-lg font-semibold">Spending forecast graph</h3>
+            {!mlSeries.length ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">Forecast appears after enough monthly history.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={mlSeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 20%)" />
+                  <XAxis dataKey="month" tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
+                  <YAxis tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
+                  <Tooltip content={<ChartTip />} />
+                  <Line type="monotone" name="Forecast baseline" dataKey="forecastExpense" stroke="hsl(260 60% 55%)" strokeWidth={2} dot={{ r: 2 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          <div className="stat-card">
+            <h3 className="mb-4 text-lg font-semibold">Savings trend graph</h3>
+            {!mlSeries.length ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">Savings trend needs monthly feature history.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={mlSeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 20%)" />
+                  <XAxis dataKey="month" tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
+                  <YAxis tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
+                  <Tooltip content={<ChartTip />} />
+                  <Area type="monotone" name="Savings" dataKey="savings" stroke="hsl(160 84% 39%)" fill="hsl(160 84% 39%)" fillOpacity={0.2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="stat-card">
+            <h3 className="mb-4 text-lg font-semibold">Category pressure visualization</h3>
+            {!categoryPressureData.length ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">Not enough category data yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={categoryPressureData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 20%)" />
+                  <XAxis dataKey="name" tick={{ fill: "hsl(215 20% 55%)", fontSize: 11 }} />
+                  <YAxis tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
+                  <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
+                  <Bar dataKey="share" name="Expense share %" fill="hsl(217 91% 60%)" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          <div className="stat-card">
+            <h3 className="mb-4 text-lg font-semibold">Spending behavior trend timeline</h3>
+            {!mlSeries.length ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">Behavior timeline appears after monthly feature generation.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={mlSeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 20%)" />
+                  <XAxis dataKey="month" tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
+                  <YAxis tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="healthScore" name="Health score" stroke="hsl(177 70% 54%)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="discretionarySharePct" name="Discretionary %" stroke="hsl(38 92% 50%)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="recurringBurdenPct" name="Recurring burden %" stroke="hsl(350 70% 55%)" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
         </div>
 
         {search && (

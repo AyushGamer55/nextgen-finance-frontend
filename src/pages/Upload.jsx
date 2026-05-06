@@ -14,8 +14,6 @@ import {
 
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Header } from "@/components/dashboard/Header";
-import { MlSourceBadge } from "@/components/ml/MlSourceBadge";
-import { MlStatusPanel } from "@/components/ml/MlStatusPanel";
 import { useFinance } from "@/context/FinanceContext";
 import { useAuth } from "@/context/AuthContext";
 import { useMlInsights } from "@/context/MlInsightsContext";
@@ -73,7 +71,7 @@ export default function Upload() {
   const navigate = useNavigate();
   const { refreshTransactions } = useFinance();
   const { session } = useAuth();
-  const { ml, loading: mlLoading, error: mlError, reportTrainingResult, lastTrainingResult } = useMlInsights();
+  const { reportTrainingResult, lastTrainingResult } = useMlInsights();
 
   const [file, setFile] = useState(null);
   const [phase, setPhase] = useState("idle");
@@ -257,14 +255,6 @@ export default function Upload() {
               Import transactions or upload a training dataset. You will get a clean preview, clear validation messages, and retraining progress when needed.
             </p>
           </div>
-
-          <MlStatusPanel
-            ml={ml}
-            loading={mlLoading}
-            error={mlError}
-            title="Current active ML model"
-            subtitle="Model health and retraining details are kept here so regular dashboard pages stay focused on financial insights."
-          />
 
           <div className="stat-card space-y-6">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -549,23 +539,14 @@ export default function Upload() {
                       See whether retraining completed successfully after dataset import.
                     </p>
                   </div>
-                  {lastTrainingResult?.source ? <MlSourceBadge source={lastTrainingResult.source} compact /> : null}
                 </div>
 
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                <div className="mt-4 grid gap-4 sm:grid-cols-1">
                   <div className="rounded-xl border border-border bg-background/60 p-4">
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">State</p>
                     <p className="mt-2 text-lg font-semibold">
                       {retrainingState === "running" ? "Retraining..." : retrainingState === "completed" ? "Completed" : retrainingState === "failed" ? "Failed" : "Idle"}
                     </p>
-                  </div>
-                  <div className="rounded-xl border border-border bg-background/60 p-4">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Latest row count</p>
-                    <p className="mt-2 text-lg font-semibold">{lastTrainingResult?.training?.dataset?.row_count || lastTrainingResult?.importedCount || 0}</p>
-                  </div>
-                  <div className="rounded-xl border border-border bg-background/60 p-4">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Trained at</p>
-                    <p className="mt-2 text-sm font-medium">{lastTrainingResult?.training?.trained_at ? new Date(lastTrainingResult.training.trained_at).toLocaleString() : "Waiting"}</p>
                   </div>
                 </div>
 
