@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { FinanceProvider } from "./context/FinanceContext";
 import { AuthProvider } from "./context/AuthContext";
+import { MlInsightsProvider } from "./context/MlInsightsContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AdvisorChatWidget } from "./components/advisor/AdvisorChatWidget";
 
@@ -38,29 +39,31 @@ const App = () => {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <FinanceProvider>
-            <TooltipProvider>
-              <Toaster />
-              <SonnerToaster />
-              <BrowserRouter>
-                <AdvisorChatWidget />
-                <Suspense fallback={<PageFallback />}>
-                  <Routes>
-                    <Route path="/" element={<Landing />} />
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/signup" element={<Signup />} />
-                    <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-                    <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
-                    <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
-                    <Route path="/report" element={<ProtectedRoute><Report /></ProtectedRoute>} />
-                    <Route path="/invest" element={<ProtectedRoute><Invest /></ProtectedRoute>} />
-                    <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
-                    <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
-                    <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </Suspense>
-              </BrowserRouter>
-            </TooltipProvider>
+            <MlInsightsProvider>
+              <TooltipProvider>
+                <Toaster />
+                <SonnerToaster />
+                <BrowserRouter>
+                  <AdvisorChatWidget />
+                  <Suspense fallback={<PageFallback />}>
+                    <Routes>
+                      <Route path="/" element={<Landing />} />
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/signup" element={<Signup />} />
+                      <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+                      <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
+                      <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+                      <Route path="/report" element={<ProtectedRoute><Report /></ProtectedRoute>} />
+                      <Route path="/invest" element={<ProtectedRoute><Invest /></ProtectedRoute>} />
+                      <Route path="/wallet" element={<ProtectedRoute><Wallet /></ProtectedRoute>} />
+                      <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
+                      <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </Suspense>
+                </BrowserRouter>
+              </TooltipProvider>
+            </MlInsightsProvider>
           </FinanceProvider>
         </AuthProvider>
       </QueryClientProvider>

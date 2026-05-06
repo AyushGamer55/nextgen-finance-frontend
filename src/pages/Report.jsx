@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { BrainCircuit, Printer, Sparkles, TrendingUp } from "lucide-react";
 
@@ -7,12 +7,21 @@ import { Header } from "@/components/dashboard/Header";
 import { useFinance } from "@/context/FinanceContext";
 import { formatCurrency } from "@/utils/dashboardUtils.js";
 import { buildInsights, insightRecommendations } from "@/lib/insights.js";
-import { analysisAPI } from "@/lib/authApi";
+import { useMlInsights } from "@/context/MlInsightsContext";
+import { MlStatusPanel } from "@/components/ml/MlStatusPanel";
+import { MlMetricsPanel } from "@/components/ml/MlMetricsPanel";
+import { MlSourceBadge } from "@/components/ml/MlSourceBadge";
+
+function formatDate(value) {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleString();
+}
 
 export default function Report() {
   const { summary, transactions } = useFinance();
-  const [mlData, setMlData] = useState(null);
-  const [mlLoading, setMlLoading] = useState(true);
+  const { ml, predictionSummary, loading: mlLoading, error: mlError, lastTrainingResult } = useMlInsights();
 
   const insights = useMemo(() => buildInsights(transactions), [transactions]);
   const recommendations = useMemo(() => insightRecommendations(insights), [insights]);
@@ -24,33 +33,6 @@ export default function Report() {
     return [...summary.trailingMonths].sort((a, b) => a.net - b.net)[0];
   }, [summary.trailingMonths]);
 
-  useEffect(() => {
-    let active = true;
-
-    const loadAnalysis = async () => {
-      try {
-        setMlLoading(true);
-        const response = await analysisAPI.getMine();
-        if (!active) return;
-        setMlData(response.data?.data || null);
-      } catch {
-        if (!active) return;
-        setMlData(null);
-      } finally {
-        if (active) {
-          setMlLoading(false);
-        }
-      }
-    };
-
-    loadAnalysis();
-
-    return () => {
-      active = false;
-    };
-  }, [transactions.length, summary.totalIncome, summary.totalExpenses]);
-
-  const ml = mlData?.ml || null;
   const overspending = ml?.overspending || null;
   const behavior = ml?.behavior || null;
   const trend = ml?.trend || null;
@@ -64,7 +46,7 @@ export default function Report() {
         <Sidebar />
       </div>
 
-      <main className="mx-auto max-w-3xl flex-1 p-8 print:max-w-none print:p-6">
+      <main className="mx-auto max-w-5xl flex-1 p-8 print:max-w-none print:p-6">
         <div className="no-print mb-6">
           <Header userName="Monthly report" />
           <div className="mt-4 flex flex-wrap gap-3">
@@ -86,6 +68,28 @@ export default function Report() {
               Generated {generated} | based on {transactions.length} recorded transactions
             </p>
           </header>
+
+          <MlStatusPanel
+            ml={ml}
+            loading={mlLoading}
+            error={mlError}
+            title="ML pipeline status"
+            subtitle="This report is now driven by the persisted backend models. You can see whether predictions come from a trained model or fallback mode."
+          />
+
+          {lastTrainingResult ? (
+            <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-emerald-200">Latest retraining result</p>
+                  <p className="mt-1 text-emerald-100/80">
+                    Models updated at {formatDate(lastTrainingResult.training?.trained_at || lastTrainingResult.at)} with {lastTrainingResult.training?.dataset?.row_count || lastTrainingResult.importedCount || 0} dataset rows.
+                  </p>
+                </div>
+                <MlSourceBadge source="trained_model" compact />
+              </div>
+            </section>
+          ) : null}
 
           <section>
             <h2 className="mb-3 text-lg font-semibold">Totals</h2>
@@ -135,38 +139,35 @@ export default function Report() {
           <section>
             <div className="mb-3 flex items-center gap-2">
               <BrainCircuit className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold">ML signals</h2>
+              <h2 className="text-lg font-semibold">Live ML insights</h2>
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-4">
+              <div className="rounded-xl border border-border p-4 print:border-gray-200">
+                <p className="text-xs text-muted-foreground">Prediction source</p>
+                <p className="mt-1 text-lg font-semibold">{mlLoading ? "Loading..." : predictionSummary?.source || "fallback_rules"}</p>
+                <div className="mt-2">
+                  <MlSourceBadge compact source={predictionSummary?.source || ml?.source} />
+                </div>
+              </div>
               <div className="rounded-xl border border-border p-4 print:border-gray-200">
                 <p className="text-xs text-muted-foreground">Overspending risk</p>
-                <p className="mt-1 text-lg font-semibold">
-                  {mlLoading ? "Loading..." : overspending?.prediction || "Not enough data"}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {overspending
-                    ? `${Math.round((overspending.probability || 0) * 100)}% probability via ${overspending.model}.`
-                    : "Built from monthly income, expenses, and remaining balance."}
-                </p>
+                <p className="mt-1 text-lg font-semibold">{mlLoading ? "Loading..." : overspending?.prediction || "Not enough data"}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{mlLoading ? "" : `${predictionSummary?.confidence || 0}% confidence`}</p>
               </div>
               <div className="rounded-xl border border-border p-4 print:border-gray-200">
                 <p className="text-xs text-muted-foreground">Spending behavior</p>
                 <p className="mt-1 text-lg font-semibold">{mlLoading ? "Loading..." : behavior?.segment || "Unknown"}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {behavior
-                    ? `Clustered with ${behavior.model} from savings rate, spend ratio, and discretionary share.`
-                    : "User type appears once enough monthly patterns exist."}
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">Cluster-driven classification.</p>
               </div>
               <div className="rounded-xl border border-border p-4 print:border-gray-200">
-                <p className="text-xs text-muted-foreground">Next month expense forecast</p>
+                <p className="text-xs text-muted-foreground">Next month forecast</p>
                 <p className="mt-1 text-lg font-semibold">{mlLoading ? "Loading..." : formatCurrency(trend?.nextMonthExpense || 0)}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {trend ? `${trend.direction} trend from ${trend.model}.` : "Forecast appears after trend analysis runs."}
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">{trend ? `${trend.direction} trend` : "Awaiting model signal"}</p>
               </div>
             </div>
           </section>
+
+          <MlMetricsPanel ml={ml} loading={mlLoading} />
 
           <section>
             <h2 className="mb-3 text-lg font-semibold">12-month momentum</h2>
@@ -235,17 +236,17 @@ export default function Report() {
                   Samples: {training?.sampleCount ?? 0}
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-background px-3 py-1">
-                  Synthetic support rows: {training?.syntheticCount ?? 0}
+                  Last trained: {formatDate(training?.trainedAt)}
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-full bg-background px-3 py-1">
-                  Label rule: expenses &gt; income OR savings &lt; 0 OR weak balance buffer
+                  Source: {predictionSummary?.source || ml?.source || "fallback_rules"}
                 </span>
               </div>
             </div>
           </section>
 
           <footer className="border-t border-border pt-6 text-xs text-muted-foreground print:border-gray-300 print:text-gray-600">
-            Hybrid system: ML predictions plus advisor guidance. Not investment or tax advice.
+            Hybrid system: ML predicts, advisor explains. Not investment or tax advice.
           </footer>
         </article>
       </main>
