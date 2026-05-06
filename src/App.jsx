@@ -17,6 +17,7 @@ const Wallet = lazy(() => import("./pages/Wallet"));
 const Accounts = lazy(() => import("./pages/Accounts"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Upload = lazy(() => import("./pages/Upload"));
+const MlControlCenter = lazy(() => import("./pages/MlControlCenter"));
 const Report = lazy(() => import("./pages/Report"));
 const Invest = lazy(() => import("./pages/Invest"));
 const Login = lazy(() => import("./pages/Login"));
@@ -52,6 +53,7 @@ const App = () => {
                       <Route path="/signup" element={<Signup />} />
                       <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
                       <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
+                      <Route path="/ml-control-center" element={<ProtectedRoute><MlControlCenter /></ProtectedRoute>} />
                       <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
                       <Route path="/report" element={<ProtectedRoute><Report /></ProtectedRoute>} />
                       <Route path="/invest" element={<ProtectedRoute><Invest /></ProtectedRoute>} />

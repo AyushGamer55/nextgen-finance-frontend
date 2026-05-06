@@ -3,11 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   Download,
   FileSpreadsheet,
   Loader2,
-  Sparkles,
   UploadCloud,
   XCircle,
 } from "lucide-react";
@@ -16,7 +16,6 @@ import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Header } from "@/components/dashboard/Header";
 import { useFinance } from "@/context/FinanceContext";
 import { useAuth } from "@/context/AuthContext";
-import { useMlInsights } from "@/context/MlInsightsContext";
 import {
   confirmTransactionsImport,
   downloadGeneratedTransactionsCsv,
@@ -28,50 +27,10 @@ import { parseRupeeAmount } from "@/lib/finance.js";
 
 const PREVIEW_ROWS = 25;
 
-function MlPreviewTable({ rows = [] }) {
-  const visibleRows = rows.slice(0, PREVIEW_ROWS);
-
-  return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border bg-muted/40">
-            <th className="px-3 py-2 text-left font-medium">Income</th>
-            <th className="px-3 py-2 text-left font-medium">Expenses</th>
-            <th className="px-3 py-2 text-left font-medium">Food</th>
-            <th className="px-3 py-2 text-left font-medium">Shopping</th>
-            <th className="px-3 py-2 text-left font-medium">Rent</th>
-            <th className="px-3 py-2 text-left font-medium">Savings</th>
-            <th className="px-3 py-2 text-left font-medium">Balance</th>
-            <th className="px-3 py-2 text-left font-medium">Label</th>
-            <th className="px-3 py-2 text-left font-medium">Month</th>
-          </tr>
-        </thead>
-        <tbody>
-          {visibleRows.map((row) => (
-            <tr key={`ml-row-${row.rowNumber}`} className="border-b border-border/60">
-              <td className="px-3 py-2">{formatCurrency(row.normalized.income)}</td>
-              <td className="px-3 py-2">{formatCurrency(row.normalized.total_expenses)}</td>
-              <td className="px-3 py-2">{formatCurrency(row.normalized.food_expense)}</td>
-              <td className="px-3 py-2">{formatCurrency(row.normalized.shopping_expense)}</td>
-              <td className="px-3 py-2">{formatCurrency(row.normalized.rent_expense)}</td>
-              <td className="px-3 py-2">{formatCurrency(row.normalized.savings)}</td>
-              <td className="px-3 py-2">{formatCurrency(row.normalized.remaining_balance)}</td>
-              <td className="px-3 py-2">{row.normalized.overspending_label}</td>
-              <td className="px-3 py-2">{row.normalized.month_index}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 export default function Upload() {
   const navigate = useNavigate();
   const { refreshTransactions } = useFinance();
   const { session } = useAuth();
-  const { reportTrainingResult, lastTrainingResult } = useMlInsights();
 
   const [file, setFile] = useState(null);
   const [phase, setPhase] = useState("idle");
@@ -82,11 +41,6 @@ export default function Upload() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatorRows, setGeneratorRows] = useState("500");
   const [generatorFeatures, setGeneratorFeatures] = useState("4");
-  const [retrainingState, setRetrainingState] = useState("idle");
-  const [retrainingError, setRetrainingError] = useState("");
-
-  const isMlDatasetPreview = previewData?.previewType === "ml_dataset";
-  const isTransactionPreview = previewData?.previewType === "transactions";
 
   const summary = useMemo(() => {
     if (!mappedPreview.length) return null;
@@ -108,20 +62,6 @@ export default function Upload() {
     };
   }, [mappedPreview]);
 
-  const mlSummary = useMemo(() => {
-    if (!isMlDatasetPreview || !previewData?.acceptedRows?.length) return null;
-
-    return previewData.acceptedRows.reduce(
-      (accumulator, row) => {
-        accumulator.income += Number(row.normalized.income || 0);
-        accumulator.expense += Number(row.normalized.total_expenses || 0);
-        accumulator.positiveLabels += Number(row.normalized.overspending_label || 0);
-        return accumulator;
-      },
-      { income: 0, expense: 0, positiveLabels: 0 }
-    );
-  }, [isMlDatasetPreview, previewData]);
-
   const handlePick = (e) => {
     const nextFile = e.target.files?.[0] || null;
     setFile(nextFile);
@@ -129,8 +69,6 @@ export default function Upload() {
     setPreviewData(null);
     setMappedPreview([]);
     setPhase("idle");
-    setRetrainingState("idle");
-    setRetrainingError("");
   };
 
   const handleUploadPreview = async () => {
@@ -150,15 +88,19 @@ export default function Upload() {
     try {
       const json = await uploadTransactionsCsv(file, session.id);
       const nextPreview = json.data;
-      const mapped = nextPreview.previewType === "transactions"
-        ? mapImportPayloadToTransactions(nextPreview.acceptedRows)
-        : [];
+      if (nextPreview.previewType !== "transactions") {
+        setPreviewData(null);
+        setMappedPreview([]);
+        setPhase("idle");
+        setError("This page supports transaction imports only. Use ML Control Center for model dataset uploads.");
+        toast.error("Detected ML dataset. Open ML Control Center for retraining.");
+        return;
+      }
+      const mapped = mapImportPayloadToTransactions(nextPreview.acceptedRows);
       setPreviewData(nextPreview);
       setMappedPreview(mapped);
       setPhase("preview");
-      toast.success(
-        `${nextPreview.previewType === "ml_dataset" ? "ML dataset" : "Import"} preview ready: ${nextPreview.summary.acceptedRows} rows accepted`
-      );
+      toast.success(`Import preview ready: ${nextPreview.summary.acceptedRows} rows accepted`);
     } catch (err) {
       const msg = err?.message || "Upload failed";
       setError(msg);
@@ -170,36 +112,19 @@ export default function Upload() {
   const handleConfirmImport = async () => {
     if (!previewData?.previewId) return;
 
-    const prompt = isMlDatasetPreview
-      ? "Save this dataset, replace the backend ML training CSV, and retrain the persisted models now?"
-      : "Import this preview into your account and replace the current backend transaction set for this user?";
+    const prompt = "Import this preview into your account and replace the current backend transaction set for this user?";
     const ok = window.confirm(prompt);
     if (!ok) return;
 
     setIsConfirming(true);
-    setRetrainingError("");
-    if (isMlDatasetPreview) {
-      setRetrainingState("running");
-    }
 
     try {
       const result = await confirmTransactionsImport(previewData.previewId);
-      if (isMlDatasetPreview) {
-        reportTrainingResult(result.data);
-        setRetrainingState("completed");
-        toast.success(`Dataset imported and ML retrained on ${result.data.importedCount} rows`);
-      } else {
-        await refreshTransactions();
-        toast.success(`Imported ${result.data.importedCount} transactions`);
-        navigate("/dashboard");
-      }
+      await refreshTransactions();
+      toast.success(`Imported ${result.data.importedCount} transactions`);
+      navigate("/dashboard");
     } catch (err) {
-      const message = err?.message || "Import failed";
-      if (isMlDatasetPreview) {
-        setRetrainingState("failed");
-        setRetrainingError(message);
-      }
-      toast.error(message);
+      toast.error(err?.message || "Import failed");
     } finally {
       setIsConfirming(false);
     }
@@ -252,8 +177,12 @@ export default function Upload() {
               Import CSV
             </h1>
             <p className="mt-2 max-w-3xl leading-relaxed text-muted-foreground">
-              Import transactions or upload a training dataset. You will get a clean preview, clear validation messages, and retraining progress when needed.
+              Import transaction CSV files into your account. This flow updates real transaction history used by dashboard analytics, trends, and forecasts.
             </p>
+            <Link to="/ml-control-center" className="mt-3 inline-flex items-center gap-2 text-sm text-primary hover:underline">
+              Open ML Control Center
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
 
           <div className="stat-card space-y-6">
@@ -266,7 +195,7 @@ export default function Upload() {
                   {session?.email || "No active session"}
                 </div>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  Transaction imports save to your account. Dataset uploads refresh the backend model pipeline.
+                  Transaction imports save to your account and power your normal analytics experience.
                 </p>
               </div>
 
@@ -283,30 +212,10 @@ export default function Upload() {
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4">
               <div className="rounded-2xl border border-border bg-muted/30 p-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  ML Dataset Upload
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Upload a dataset that matches the training schema to refresh your prediction engine in one step.
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  <span className="rounded-full bg-background px-3 py-1">income</span>
-                  <span className="rounded-full bg-background px-3 py-1">total_expenses</span>
-                  <span className="rounded-full bg-background px-3 py-1">food_expense</span>
-                  <span className="rounded-full bg-background px-3 py-1">shopping_expense</span>
-                  <span className="rounded-full bg-background px-3 py-1">rent_expense</span>
-                  <span className="rounded-full bg-background px-3 py-1">savings</span>
-                  <span className="rounded-full bg-background px-3 py-1">remaining_balance</span>
-                  <span className="rounded-full bg-background px-3 py-1">overspending_label</span>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-border bg-muted/30 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Sparkles className="h-4 w-4 text-primary" />
+                  <FileSpreadsheet className="h-4 w-4 text-primary" />
                   Generate sample transaction CSV from backend
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -385,7 +294,7 @@ export default function Upload() {
           {phase === "preview" && previewData && (
             <div className="space-y-6 animate-fade-in">
               <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                Detected upload type: <span className="font-medium text-foreground">{isMlDatasetPreview ? "ML training dataset" : "Transaction import"}</span>
+                Detected upload type: <span className="font-medium text-foreground">Transaction import</span>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
@@ -399,7 +308,7 @@ export default function Upload() {
                 </div>
                 <div className="stat-card">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Mode</p>
-                  <p className="mt-1 text-lg font-bold">{isMlDatasetPreview ? "Dataset" : "Transactions"}</p>
+                  <p className="mt-1 text-lg font-bold">Transactions</p>
                 </div>
                 <div className="stat-card">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Rows scanned</p>
@@ -407,7 +316,7 @@ export default function Upload() {
                 </div>
               </div>
 
-              {isTransactionPreview && summary && (
+              {summary && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div className="stat-card">
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">Income</p>
@@ -424,28 +333,9 @@ export default function Upload() {
                 </div>
               )}
 
-              {isMlDatasetPreview && mlSummary && (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div className="stat-card">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Dataset income total</p>
-                    <p className="mt-1 text-2xl font-bold text-emerald-500">{formatCurrency(mlSummary.income)}</p>
-                  </div>
-                  <div className="stat-card">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Dataset expense total</p>
-                    <p className="mt-1 text-2xl font-bold text-red-400">{formatCurrency(mlSummary.expense)}</p>
-                  </div>
-                  <div className="stat-card">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Positive labels</p>
-                    <p className="mt-1 text-2xl font-bold">{mlSummary.positiveLabels}</p>
-                  </div>
-                </div>
-              )}
-
               <div className="stat-card overflow-hidden">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-lg font-semibold">
-                    {isMlDatasetPreview ? `Dataset preview (first ${PREVIEW_ROWS} rows)` : `Preview (first ${PREVIEW_ROWS} rows)`}
-                  </h2>
+                  <h2 className="text-lg font-semibold">Preview (first {PREVIEW_ROWS} rows)</h2>
                   <button
                     type="button"
                     onClick={handleConfirmImport}
@@ -453,42 +343,38 @@ export default function Upload() {
                     className="inline-flex items-center gap-2 rounded-xl bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground disabled:opacity-40"
                   >
                     {isConfirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                    {isMlDatasetPreview ? "Confirm dataset & retrain" : "Confirm import"}
+                    Confirm import
                   </button>
                 </div>
 
-                {isTransactionPreview ? (
-                  <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border bg-muted/40">
-                          <th className="px-3 py-2 text-left font-medium">Date</th>
-                          <th className="px-3 py-2 text-left font-medium">Name</th>
-                          <th className="px-3 py-2 text-left font-medium">Category</th>
-                          <th className="px-3 py-2 text-left font-medium">Type</th>
-                          <th className="px-3 py-2 text-right font-medium">Amount</th>
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/40">
+                        <th className="px-3 py-2 text-left font-medium">Date</th>
+                        <th className="px-3 py-2 text-left font-medium">Name</th>
+                        <th className="px-3 py-2 text-left font-medium">Category</th>
+                        <th className="px-3 py-2 text-left font-medium">Type</th>
+                        <th className="px-3 py-2 text-right font-medium">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mappedPreview.slice(0, PREVIEW_ROWS).map((row) => (
+                        <tr key={row.id} className="border-b border-border/60">
+                          <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{row.date}</td>
+                          <td className="max-w-[200px] truncate px-3 py-2">{row.name}</td>
+                          <td className="px-3 py-2">{row.category}</td>
+                          <td className="px-3 py-2 capitalize">{row.iconType}</td>
+                          <td className="px-3 py-2 text-right font-medium">{row.amount}</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {mappedPreview.slice(0, PREVIEW_ROWS).map((row) => (
-                          <tr key={row.id} className="border-b border-border/60">
-                            <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{row.date}</td>
-                            <td className="max-w-[200px] truncate px-3 py-2">{row.name}</td>
-                            <td className="px-3 py-2">{row.category}</td>
-                            <td className="px-3 py-2 capitalize">{row.iconType}</td>
-                            <td className="px-3 py-2 text-right font-medium">{row.amount}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <MlPreviewTable rows={previewData.acceptedRows || []} />
-                )}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-                {(isTransactionPreview ? mappedPreview.length : previewData.acceptedRows?.length || 0) > PREVIEW_ROWS && (
+                {mappedPreview.length > PREVIEW_ROWS && (
                   <p className="mt-2 text-xs text-muted-foreground">
-                    + {(isTransactionPreview ? mappedPreview.length : previewData.acceptedRows.length) - PREVIEW_ROWS} more rows will be {isMlDatasetPreview ? "used for training" : "imported"} on confirm.
+                    + {mappedPreview.length - PREVIEW_ROWS} more rows will be imported on confirm.
                   </p>
                 )}
               </div>
@@ -517,47 +403,11 @@ export default function Upload() {
                 </div>
               )}
 
-              {isMlDatasetPreview && (
-                <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
-                  Required schema: income, total_expenses, food_expense, shopping_expense, rent_expense, savings, remaining_balance, overspending_label, month_index(optional).
-                </div>
-              )}
-
               <p className="text-xs text-muted-foreground">
-                Preview belongs to <span className="font-mono text-foreground">{session?.email || session?.id}</span> and is confirmed against the backend before {isMlDatasetPreview ? "model retraining starts" : "the dashboard refreshes"}.
+                Preview belongs to <span className="font-mono text-foreground">{session?.email || session?.id}</span> and is confirmed against the backend before the dashboard refreshes.
               </p>
             </div>
           )}
-
-          {isMlDatasetPreview || retrainingState !== "idle" || lastTrainingResult ? (
-            <div className="space-y-6">
-              <section className="rounded-2xl border border-border bg-card/70 p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold">Retraining feedback</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      See whether retraining completed successfully after dataset import.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-4 sm:grid-cols-1">
-                  <div className="rounded-xl border border-border bg-background/60 p-4">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">State</p>
-                    <p className="mt-2 text-lg font-semibold">
-                      {retrainingState === "running" ? "Retraining..." : retrainingState === "completed" ? "Completed" : retrainingState === "failed" ? "Failed" : "Idle"}
-                    </p>
-                  </div>
-                </div>
-
-                {retrainingError ? (
-                  <div className="mt-4 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                    {retrainingError}
-                  </div>
-                ) : null}
-              </section>
-            </div>
-          ) : null}
         </div>
       </main>
     </div>

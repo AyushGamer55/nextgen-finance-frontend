@@ -30,7 +30,7 @@ import {
   parseRupeeAmount,
   parseTxDate,
 } from "@/lib/finance.js";
-import { buildInsights } from "@/lib/insights.js";
+import { buildAiHighlights, buildInsights } from "@/lib/insights.js";
 import { formatCurrency } from "@/utils/dashboardUtils.js";
 import { useMlInsights } from "@/context/MlInsightsContext";
 
@@ -44,7 +44,7 @@ const PIE_COLORS = [
   "hsl(200 80% 50%)",
 ];
 
-const ChartTip = ({ active, payload, label }) => {
+const CurrencyTip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border border-border bg-card p-3 text-sm shadow-xl">
@@ -58,9 +58,40 @@ const ChartTip = ({ active, payload, label }) => {
   );
 };
 
+const PercentTip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 text-sm shadow-xl">
+      <p className="mb-1 font-medium">{label}</p>
+      {payload.map((entry, index) => (
+        <p key={index} style={{ color: entry.color }}>
+          {entry.name}: {Number(entry.value).toFixed(1)}%
+        </p>
+      ))}
+    </div>
+  );
+};
+
+const CategoryPressureTip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 text-sm shadow-xl">
+      <p className="mb-1 font-medium">{label}</p>
+      {payload.map((entry, index) => (
+        <div key={index} style={{ color: entry.color }}>
+          <p>{entry.name}: {Number(entry.value).toFixed(1)}%</p>
+          {entry.payload?.amount ? (
+            <p className="text-xs text-muted-foreground">{formatCurrency(Number(entry.payload.amount))}</p>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const Analytics = () => {
   const { transactions, monthlyBarsForYear } = useFinance();
-  const { monthlyDataset, predictionSummary, currentFeatures } = useMlInsights();
+  const { monthlyDataset, predictionSummary, currentFeatures, analytics } = useMlInsights();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(String(currentYear));
   const [search, setSearch] = useState("");
@@ -92,31 +123,70 @@ const Analytics = () => {
   }, [yearTx]);
 
   const insights = useMemo(() => buildInsights(yearTx), [yearTx]);
-  const hasActivity = useMemo(() => yearTx.some((tx) => parseTxDate(tx.date)), [yearTx]);
-  const mlSeries = useMemo(
-    () => (monthlyDataset || []).map((row) => ({
-      month: row.month?.slice(5) || row.month,
-      forecastExpense: Number(row.expenses || 0),
-      savings: Number(row.savings || 0),
-      healthScore: Number(row.financialHealthScore || 0),
-      discretionarySharePct: Number((row.discretionaryShare || 0) * 100),
-      recurringBurdenPct: Number((row.recurringExpenseBurden || 0) * 100),
-    })),
-    [monthlyDataset]
+  const aiHighlights = useMemo(
+    () => buildAiHighlights({ predictionSummary, summary, analytics }),
+    [predictionSummary, summary, analytics]
   );
+  const hasActivity = useMemo(() => yearTx.some((tx) => parseTxDate(tx.date)), [yearTx]);
+
+  const mlSeries = useMemo(() => {
+    const sourceRows = analytics?.monthlyBehaviorRows?.length ? analytics.monthlyBehaviorRows : (monthlyDataset || []);
+    return sourceRows
+      .filter((row) => String(row.month || "").startsWith(`${year}-`))
+      .map((row) => ({
+        month: row.month?.slice(5) || row.month,
+        forecastExpense: Number(row.forecast_expense || row.total_expenses || row.expenses || 0),
+        savings: Number(row.savings || 0),
+        healthScore: Number(row.health_score || row.financialHealthScore || 0),
+        discretionarySharePct: Number((row.discretionary_spending || row.discretionaryShare || 0) * 100),
+        recurringBurdenPct: Number((row.recurring_expense_burden || row.recurringExpenseBurden || 0) * 100),
+        anomalyScorePct: Number((row.anomaly_score || row.anomalyScore || 0) * 100),
+        estimated: Boolean(row.estimated),
+      }));
+  }, [analytics, monthlyDataset, year]);
+
   const nextMonthForecast = Number(predictionSummary?.predicted_expense || 0);
   const riskLabel = String(predictionSummary?.overspending_risk || "Unknown");
   const riskTone = /high/i.test(riskLabel) ? "text-red-400" : /medium/i.test(riskLabel) ? "text-amber-400" : "text-emerald-500";
   const healthScore = Number(predictionSummary?.monthly_health_score || currentFeatures?.financialHealthScore || 0);
   const anomalyDetected = Boolean(predictionSummary?.anomaly_detected || currentFeatures?.anomaly);
   const anomalyScore = Number(predictionSummary?.anomaly_score || currentFeatures?.anomalyScore || 0);
+
   const categoryPressureData = useMemo(() => {
+    if (analytics?.categoryPressure?.length) {
+      return analytics.categoryPressure.map((row) => ({
+        name: row.category,
+        share: Number(row.share || 0),
+        amount: Number(row.amount || 0),
+      }));
+    }
+
     if (!summary.totalExpenses) return [];
     return summary.categoryExpensePie.slice(0, 6).map((row) => ({
       name: row.name,
       share: Number(((row.value / summary.totalExpenses) * 100).toFixed(1)),
+      amount: Number(row.value || 0),
     }));
-  }, [summary]);
+  }, [analytics, summary]);
+
+  const forecastSeries = useMemo(() => {
+    if (analytics?.forecastChart?.length) {
+      return analytics.forecastChart
+        .filter((row) => String(row.month || "").startsWith(`${year}-`))
+        .map((row) => ({
+          month: row.month?.slice(5) || row.month,
+          actualExpense: Number(row.actual_expense || 0),
+          forecastExpense: Number(row.forecast_expense || 0),
+        }));
+    }
+    return mlSeries.map((row) => ({
+      month: row.month,
+      actualExpense: row.forecastExpense,
+      forecastExpense: row.forecastExpense,
+    }));
+  }, [analytics, mlSeries, year]);
+
+  const hasEstimatedRows = useMemo(() => mlSeries.some((row) => row.estimated), [mlSeries]);
 
   const spendChange = useMemo(() => {
     if (String(year) !== String(currentYear)) return null;
@@ -177,7 +247,7 @@ const Analytics = () => {
         </div>
 
         <div className="mb-8">
-          <InsightsPanel insights={insights} compact title={`Insights | ${year}`} />
+          <InsightsPanel insights={[...aiHighlights, ...insights].slice(0, 6)} compact title={`Insights | ${year}`} />
         </div>
 
         <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
@@ -216,7 +286,7 @@ const Analytics = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 20%)" />
                   <XAxis dataKey="month" tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
                   <YAxis tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
-                  <Tooltip content={<ChartTip />} />
+                  <Tooltip content={<CurrencyTip />} />
                   <Legend />
                   <Area type="monotone" name="Income" dataKey="main" stroke="hsl(177 70% 54%)" fill="hsl(177 70% 54%)" fillOpacity={0.2} />
                   <Area type="monotone" name="Spending" dataKey="others" stroke="hsl(260 60% 55%)" fill="hsl(260 60% 55%)" fillOpacity={0.2} />
@@ -254,7 +324,7 @@ const Analytics = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 20%)" />
                 <XAxis dataKey="month" tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
                 <YAxis tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
-                <Tooltip content={<ChartTip />} />
+                <Tooltip content={<CurrencyTip />} />
                 <Line type="monotone" name="Net (income - spending)" dataKey="net" stroke="hsl(177 70% 54%)" strokeWidth={2} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -264,16 +334,17 @@ const Analytics = () => {
         <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="stat-card">
             <h3 className="mb-4 text-lg font-semibold">Spending forecast graph</h3>
-            {!mlSeries.length ? (
+            {!forecastSeries.length ? (
               <p className="py-12 text-center text-sm text-muted-foreground">Forecast appears after enough monthly history.</p>
             ) : (
               <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={mlSeries}>
+                <LineChart data={forecastSeries}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 20%)" />
                   <XAxis dataKey="month" tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
                   <YAxis tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
-                  <Tooltip content={<ChartTip />} />
-                  <Line type="monotone" name="Forecast baseline" dataKey="forecastExpense" stroke="hsl(260 60% 55%)" strokeWidth={2} dot={{ r: 2 }} />
+                  <Tooltip content={<CurrencyTip />} />
+                  <Line type="monotone" name="Actual expense" dataKey="actualExpense" stroke="hsl(217 91% 60%)" strokeWidth={2} dot={{ r: 2 }} />
+                  <Line type="monotone" name="Forecast" dataKey="forecastExpense" stroke="hsl(260 60% 55%)" strokeWidth={2} dot={false} strokeDasharray="5 5" />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -288,7 +359,7 @@ const Analytics = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 20%)" />
                   <XAxis dataKey="month" tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
                   <YAxis tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
-                  <Tooltip content={<ChartTip />} />
+                  <Tooltip content={<CurrencyTip />} />
                   <Area type="monotone" name="Savings" dataKey="savings" stroke="hsl(160 84% 39%)" fill="hsl(160 84% 39%)" fillOpacity={0.2} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -298,16 +369,16 @@ const Analytics = () => {
 
         <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="stat-card">
-            <h3 className="mb-4 text-lg font-semibold">Category pressure visualization</h3>
+            <h3 className="mb-4 text-lg font-semibold">Category pressure distribution</h3>
             {!categoryPressureData.length ? (
-              <p className="py-12 text-center text-sm text-muted-foreground">Not enough category data yet.</p>
+              <p className="py-12 text-center text-sm text-muted-foreground">Not enough expense category data yet.</p>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={categoryPressureData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 20%)" />
                   <XAxis dataKey="name" tick={{ fill: "hsl(215 20% 55%)", fontSize: 11 }} />
                   <YAxis tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
-                  <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
+                  <Tooltip content={<CategoryPressureTip />} />
                   <Bar dataKey="share" name="Expense share %" fill="hsl(217 91% 60%)" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -323,7 +394,7 @@ const Analytics = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(222 30% 20%)" />
                   <XAxis dataKey="month" tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
                   <YAxis tick={{ fill: "hsl(215 20% 55%)", fontSize: 12 }} />
-                  <Tooltip />
+                  <Tooltip content={<PercentTip />} />
                   <Legend />
                   <Line type="monotone" dataKey="healthScore" name="Health score" stroke="hsl(177 70% 54%)" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="discretionarySharePct" name="Discretionary %" stroke="hsl(38 92% 50%)" strokeWidth={2} dot={false} />
@@ -331,6 +402,9 @@ const Analytics = () => {
                 </LineChart>
               </ResponsiveContainer>
             )}
+            {hasEstimatedRows ? (
+              <p className="mt-2 text-xs text-muted-foreground">Some early months are estimated to keep trend continuity while history is still building.</p>
+            ) : null}
           </div>
         </div>
 

@@ -9,6 +9,7 @@ import {
   FileText,
   LineChart,
   Landmark,
+  BrainCircuit,
   LogIn,
   LogOut,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import { useAuth } from "@/context/AuthContext";
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: UploadCloud, label: "Import CSV", path: "/upload" },
+  { icon: BrainCircuit, label: "ML Control", path: "/ml-control-center" },
   { icon: BarChart3, label: "Analytics", path: "/analytics" },
   { icon: FileText, label: "Report", path: "/report" },
   { icon: LineChart, label: "Invest", path: "/invest" },
