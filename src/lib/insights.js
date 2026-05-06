@@ -116,3 +116,78 @@ export function insightRecommendations(insights) {
     .map((i) => i.action || i.detail)
     .filter(Boolean);
 }
+
+export function buildAiHighlights({ predictionSummary, summary }) {
+  const highlights = [];
+  const risk = predictionSummary?.overspending_risk;
+  const confidence = Number(predictionSummary?.confidence || 0);
+  const predictedExpense = Number(predictionSummary?.predicted_expense || 0);
+  const avgExpense = Number(summary?.averageMonthlyExpenses || 0);
+  const spendingChange = Number(summary?.expenseMoMGrowth || 0);
+  const savingsRate = Number(summary?.savingsRate || 0);
+
+  if (Number.isFinite(spendingChange) && spendingChange >= 10) {
+    highlights.push({
+      id: "ai-spend-up",
+      kind: "warning",
+      title: "Spending has accelerated this month",
+      detail: `Expenses are up ${spendingChange.toFixed(0)}% versus last month. If this pace continues, your monthly budget can run tight.`,
+      action: "Review the top two categories and cap non-essential spending this week.",
+    });
+  }
+
+  if (risk === "high") {
+    highlights.push({
+      id: "ai-risk-high",
+      kind: "warning",
+      title: "Higher chance of overspending",
+      detail: `Recent transaction behavior suggests elevated budget pressure${confidence > 0 ? ` (${confidence}% confidence)` : ""}.`,
+      action: "Set a short-term limit for shopping and entertainment until trend cools.",
+    });
+  } else if (risk === "low") {
+    highlights.push({
+      id: "ai-risk-low",
+      kind: "positive",
+      title: "Spending risk looks controlled",
+      detail: "Your recent pattern is stable and currently within a healthy range.",
+      action: "Keep recurring transfers to savings active.",
+    });
+  }
+
+  if (predictedExpense > 0 && avgExpense > 0) {
+    const deltaPct = ((predictedExpense - avgExpense) / avgExpense) * 100;
+    if (deltaPct >= 8) {
+      highlights.push({
+        id: "ai-forecast-up",
+        kind: "warning",
+        title: "Upcoming expenses may be higher than usual",
+        detail: `Projected spend is around ${formatCurrency(predictedExpense)}, about ${deltaPct.toFixed(0)}% above your typical monthly level.`,
+      });
+    } else if (deltaPct <= -8) {
+      highlights.push({
+        id: "ai-forecast-down",
+        kind: "positive",
+        title: "Expense forecast is improving",
+        detail: `Projected spend is near ${formatCurrency(predictedExpense)}, about ${Math.abs(deltaPct).toFixed(0)}% below your usual monthly level.`,
+      });
+    }
+  }
+
+  if (savingsRate >= 20) {
+    highlights.push({
+      id: "ai-savings-strong",
+      kind: "positive",
+      title: "Savings trend is strong",
+      detail: `You are retaining about ${savingsRate.toFixed(0)}% of income after expenses, which is a solid cushion for goals and emergencies.`,
+    });
+  } else if (savingsRate > 0 && savingsRate <= 8) {
+    highlights.push({
+      id: "ai-savings-thin",
+      kind: "tip",
+      title: "Savings cushion is thin",
+      detail: `Current savings rate is near ${savingsRate.toFixed(0)}%. A small category cut can noticeably improve month-end balance.`,
+    });
+  }
+
+  return highlights.slice(0, 4);
+}

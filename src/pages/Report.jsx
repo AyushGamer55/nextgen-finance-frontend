@@ -1,29 +1,23 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { BrainCircuit, Printer, Sparkles, TrendingUp } from "lucide-react";
+import { BrainCircuit, Printer } from "lucide-react";
 
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Header } from "@/components/dashboard/Header";
 import { useFinance } from "@/context/FinanceContext";
 import { formatCurrency } from "@/utils/dashboardUtils.js";
-import { buildInsights, insightRecommendations } from "@/lib/insights.js";
+import { buildAiHighlights, buildInsights, insightRecommendations } from "@/lib/insights.js";
 import { useMlInsights } from "@/context/MlInsightsContext";
-import { MlStatusPanel } from "@/components/ml/MlStatusPanel";
-import { MlMetricsPanel } from "@/components/ml/MlMetricsPanel";
-import { MlSourceBadge } from "@/components/ml/MlSourceBadge";
-
-function formatDate(value) {
-  if (!value) return "Not available";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return date.toLocaleString();
-}
 
 export default function Report() {
   const { summary, transactions } = useFinance();
-  const { ml, predictionSummary, loading: mlLoading, error: mlError, lastTrainingResult } = useMlInsights();
+  const { predictionSummary } = useMlInsights();
 
   const insights = useMemo(() => buildInsights(transactions), [transactions]);
+  const aiHighlights = useMemo(
+    () => buildAiHighlights({ predictionSummary, summary }),
+    [predictionSummary, summary]
+  );
   const recommendations = useMemo(() => insightRecommendations(insights), [insights]);
   const generated = useMemo(() => new Date().toLocaleString(), []);
   const strongestMonth = useMemo(() => {
@@ -32,11 +26,6 @@ export default function Report() {
   const weakestMonth = useMemo(() => {
     return [...summary.trailingMonths].sort((a, b) => a.net - b.net)[0];
   }, [summary.trailingMonths]);
-
-  const overspending = ml?.overspending || null;
-  const behavior = ml?.behavior || null;
-  const trend = ml?.trend || null;
-  const training = ml?.training || null;
 
   const handlePrint = () => window.print();
 
@@ -68,28 +57,6 @@ export default function Report() {
               Generated {generated} | based on {transactions.length} recorded transactions
             </p>
           </header>
-
-          <MlStatusPanel
-            ml={ml}
-            loading={mlLoading}
-            error={mlError}
-            title="ML pipeline status"
-            subtitle="This report is now driven by the persisted backend models. You can see whether predictions come from a trained model or fallback mode."
-          />
-
-          {lastTrainingResult ? (
-            <section className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-emerald-200">Latest retraining result</p>
-                  <p className="mt-1 text-emerald-100/80">
-                    Models updated at {formatDate(lastTrainingResult.training?.trained_at || lastTrainingResult.at)} with {lastTrainingResult.training?.dataset?.row_count || lastTrainingResult.importedCount || 0} dataset rows.
-                  </p>
-                </div>
-                <MlSourceBadge source="trained_model" compact />
-              </div>
-            </section>
-          ) : null}
 
           <section>
             <h2 className="mb-3 text-lg font-semibold">Totals</h2>
@@ -139,35 +106,21 @@ export default function Report() {
           <section>
             <div className="mb-3 flex items-center gap-2">
               <BrainCircuit className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold">Live ML insights</h2>
+              <h2 className="text-lg font-semibold">AI-driven outlook</h2>
             </div>
-            <div className="grid gap-4 sm:grid-cols-4">
-              <div className="rounded-xl border border-border p-4 print:border-gray-200">
-                <p className="text-xs text-muted-foreground">Prediction source</p>
-                <p className="mt-1 text-lg font-semibold">{mlLoading ? "Loading..." : predictionSummary?.source || "fallback_rules"}</p>
-                <div className="mt-2">
-                  <MlSourceBadge compact source={predictionSummary?.source || ml?.source} />
-                </div>
-              </div>
-              <div className="rounded-xl border border-border p-4 print:border-gray-200">
-                <p className="text-xs text-muted-foreground">Overspending risk</p>
-                <p className="mt-1 text-lg font-semibold">{mlLoading ? "Loading..." : overspending?.prediction || "Not enough data"}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{mlLoading ? "" : `${predictionSummary?.confidence || 0}% confidence`}</p>
-              </div>
-              <div className="rounded-xl border border-border p-4 print:border-gray-200">
-                <p className="text-xs text-muted-foreground">Spending behavior</p>
-                <p className="mt-1 text-lg font-semibold">{mlLoading ? "Loading..." : behavior?.segment || "Unknown"}</p>
-                <p className="mt-1 text-sm text-muted-foreground">Cluster-driven classification.</p>
-              </div>
-              <div className="rounded-xl border border-border p-4 print:border-gray-200">
-                <p className="text-xs text-muted-foreground">Next month forecast</p>
-                <p className="mt-1 text-lg font-semibold">{mlLoading ? "Loading..." : formatCurrency(trend?.nextMonthExpense || 0)}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{trend ? `${trend.direction} trend` : "Awaiting model signal"}</p>
-              </div>
-            </div>
+            <ul className="list-none space-y-3 pl-0">
+              {aiHighlights.length ? aiHighlights.map((insight) => (
+                <li key={insight.id} className="rounded-lg border border-border px-4 py-3 text-sm print:border-gray-200">
+                  <p className="font-medium">{insight.title}</p>
+                  <p className="mt-1 leading-relaxed text-muted-foreground print:text-gray-700">{insight.detail}</p>
+                </li>
+              )) : (
+                <li className="rounded-lg border border-border px-4 py-3 text-sm text-muted-foreground print:border-gray-200 print:text-gray-700">
+                  Continue adding transactions to unlock stronger spending forecasts and trend alerts.
+                </li>
+              )}
+            </ul>
           </section>
-
-          <MlMetricsPanel ml={ml} loading={mlLoading} />
 
           <section>
             <h2 className="mb-3 text-lg font-semibold">12-month momentum</h2>
@@ -208,41 +161,6 @@ export default function Report() {
                 <li key={index}>{line}</li>
               ))}
             </ol>
-          </section>
-
-          <section>
-            <div className="rounded-2xl border border-border bg-muted/20 p-5 print:border-gray-200">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <h2 className="text-sm font-semibold">How the prediction layer works</h2>
-              </div>
-              <div className="mt-3 grid gap-4 text-sm text-muted-foreground print:text-gray-700 sm:grid-cols-3">
-                <div>
-                  <p className="font-medium text-foreground print:text-black">Logistic Regression</p>
-                  <p className="mt-1">Uses monthly income, expenses, category pressure, and balance position to estimate overspending risk.</p>
-                </div>
-                <div>
-                  <p className="font-medium text-foreground print:text-black">K-Means</p>
-                  <p className="mt-1">Groups the account into low, moderate, or high spender behavior without manual labels.</p>
-                </div>
-                <div>
-                  <p className="font-medium text-foreground print:text-black">Linear Regression</p>
-                  <p className="mt-1">Projects next-month expenses from the month-by-month expense trend.</p>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1 rounded-full bg-background px-3 py-1">
-                  <TrendingUp className="h-3 w-3" />
-                  Samples: {training?.sampleCount ?? 0}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-background px-3 py-1">
-                  Last trained: {formatDate(training?.trainedAt)}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-background px-3 py-1">
-                  Source: {predictionSummary?.source || ml?.source || "fallback_rules"}
-                </span>
-              </div>
-            </div>
           </section>
 
           <footer className="border-t border-border pt-6 text-xs text-muted-foreground print:border-gray-300 print:text-gray-600">

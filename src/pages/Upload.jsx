@@ -14,7 +14,6 @@ import {
 
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Header } from "@/components/dashboard/Header";
-import { MlMetricsPanel } from "@/components/ml/MlMetricsPanel";
 import { MlSourceBadge } from "@/components/ml/MlSourceBadge";
 import { MlStatusPanel } from "@/components/ml/MlStatusPanel";
 import { useFinance } from "@/context/FinanceContext";
@@ -68,32 +67,6 @@ function MlPreviewTable({ rows = [] }) {
       </table>
     </div>
   );
-}
-
-function buildMlFromTrainingResult(trainingResult) {
-  if (!trainingResult?.training) return null;
-
-  const training = trainingResult.training;
-
-  return {
-    source: trainingResult.source || "trained_model",
-    overspending: {
-      metrics: training.models?.logistic_regression || {},
-    },
-    behavior: {
-      metrics: training.models?.kmeans || {},
-    },
-    trend: {
-      confidenceScore: (training.models?.linear_regression?.r2_score || 0) * 100,
-      metrics: training.models?.linear_regression || {},
-    },
-    training: {
-      status: training.status,
-      trainedAt: training.trained_at,
-      sampleCount: training.dataset?.row_count,
-      invalidRowsDropped: training.dataset?.invalid_rows_dropped,
-    },
-  };
 }
 
 export default function Upload() {
@@ -150,8 +123,6 @@ export default function Upload() {
       { income: 0, expense: 0, positiveLabels: 0 }
     );
   }, [isMlDatasetPreview, previewData]);
-
-  const latestTrainingMl = useMemo(() => buildMlFromTrainingResult(lastTrainingResult), [lastTrainingResult]);
 
   const handlePick = (e) => {
     const nextFile = e.target.files?.[0] || null;
@@ -283,7 +254,7 @@ export default function Upload() {
               Import CSV
             </h1>
             <p className="mt-2 max-w-3xl leading-relaxed text-muted-foreground">
-              The uploader now supports both transaction imports and ML dataset retraining. That means MountDash can show real validation, real model status, and visible retraining feedback instead of a hidden backend-only pipeline.
+              Import transactions or upload a training dataset. You will get a clean preview, clear validation messages, and retraining progress when needed.
             </p>
           </div>
 
@@ -292,7 +263,7 @@ export default function Upload() {
             loading={mlLoading}
             error={mlError}
             title="Current active ML model"
-            subtitle="This is the live model status that dashboard and report pages are using right now."
+            subtitle="Model health and retraining details are kept here so regular dashboard pages stay focused on financial insights."
           />
 
           <div className="stat-card space-y-6">
@@ -305,7 +276,7 @@ export default function Upload() {
                   {session?.email || "No active session"}
                 </div>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  Transaction imports save to your logged-in account. ML dataset uploads update the backend training dataset and retrain persisted models.
+                  Transaction imports save to your account. Dataset uploads refresh the backend model pipeline.
                 </p>
               </div>
 
@@ -329,7 +300,7 @@ export default function Upload() {
                   ML Dataset Upload
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Upload a dataset matching the persisted ML schema to retrain logistic regression, K-Means, and linear regression in one step.
+                  Upload a dataset that matches the training schema to refresh your prediction engine in one step.
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted-foreground">
                   <span className="rounded-full bg-background px-3 py-1">income</span>
@@ -349,7 +320,7 @@ export default function Upload() {
                   Generate sample transaction CSV from backend
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  This generator is for transaction imports. ML datasets should use the financial behavior schema from the backend dataset folder.
+                  This generator is for transaction imports only.
                 </p>
 
                 <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -575,7 +546,7 @@ export default function Upload() {
                   <div>
                     <p className="text-sm font-semibold">Retraining feedback</p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      The UI now shows whether the model updated successfully instead of only displaying an upload confirmation.
+                      See whether retraining completed successfully after dataset import.
                     </p>
                   </div>
                   {lastTrainingResult?.source ? <MlSourceBadge source={lastTrainingResult.source} compact /> : null}
@@ -604,8 +575,6 @@ export default function Upload() {
                   </div>
                 ) : null}
               </section>
-
-              {latestTrainingMl ? <MlMetricsPanel ml={latestTrainingMl} loading={false} /> : null}
             </div>
           ) : null}
         </div>
