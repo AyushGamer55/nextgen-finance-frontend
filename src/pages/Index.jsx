@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Header } from "@/components/dashboard/Header";
@@ -27,15 +27,25 @@ const actionButtons = [
 const Index = () => {
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState(null);
-  const { summary, transactions } = useFinance();
+  const { summary, transactions, refreshData } = useFinance();
   const { session } = useAuth();
-  const { predictionSummary } = useMlInsights();
+  const { predictionSummary, refreshInsights } = useMlInsights();
   const insights = useMemo(() => buildInsights(transactions), [transactions]);
   const aiHighlights = useMemo(
     () => buildAiHighlights({ predictionSummary, summary }),
     [predictionSummary, summary]
   );
   const availableBalance = session?.balance ?? summary.netSavings;
+
+  // Auto-refresh dashboard data every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshData();
+      refreshInsights();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [refreshData, refreshInsights]);
 
   const profileName = session?.name || "Dashboard";
 
