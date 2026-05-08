@@ -125,8 +125,9 @@ export function buildAiHighlights({ predictionSummary, summary, analytics }) {
   const avgExpense = Number(summary?.averageMonthlyExpenses || 0);
   const spendingChange = Number(summary?.expenseMoMGrowth || 0);
   const savingsRate = Number(summary?.savingsRate || 0);
-  const volatility = Number(predictionSummary?.spending_volatility || analytics?.monthlyBehaviorRows?.at?.(-1)?.spending_volatility || 0);
-  const anomalyDetected = Boolean(predictionSummary?.anomaly_detected || analytics?.anomalyHistory?.at?.(-1)?.anomaly);
+  // Remove confusing volatility and anomaly metrics
+  // const volatility = Number(predictionSummary?.spending_volatility || analytics?.monthlyBehaviorRows?.at?.(-1)?.spending_volatility || 0);
+  // const anomalyDetected = Boolean(predictionSummary?.anomaly_detected || analytics?.anomalyHistory?.at?.(-1)?.anomaly);
 
   if (Number.isFinite(spendingChange) && spendingChange >= 10) {
     highlights.push({
@@ -156,24 +157,25 @@ export function buildAiHighlights({ predictionSummary, summary, analytics }) {
     });
   }
 
-  if (volatility >= 0.2) {
-    highlights.push({
-      id: "ai-volatility",
-      kind: "warning",
-      title: "Spending volatility is elevated",
-      detail: "Monthly expenses are fluctuating more than usual, which can reduce savings consistency.",
-      action: "Stabilize two discretionary categories with weekly limits.",
-    });
-  }
+  // Remove confusing volatility and anomaly insights
+  // if (volatility >= 0.2) {
+  //   highlights.push({
+  //     id: "ai-volatility",
+  //     kind: "warning",
+  //     title: "Spending volatility is elevated",
+  //     detail: "Monthly expenses are fluctuating more than usual, which can reduce savings consistency.",
+  //     action: "Stabilize two discretionary categories with weekly limits.",
+  //   });
+  // }
 
-  if (anomalyDetected) {
-    highlights.push({
-      id: "ai-anomaly",
-      kind: "warning",
-      title: "Unusual expense spike detected",
-      detail: "Recent spending is above your baseline trend. Check one-off purchases before month end.",
-    });
-  }
+  // if (anomalyDetected) {
+  //   highlights.push({
+  //     id: "ai-anomaly",
+  //     kind: "warning",
+  //     title: "Unusual expense spike detected",
+  //     detail: "Recent spending is above your baseline trend. Check one-off purchases before month end.",
+  //   });
+  // }
 
   if (predictedExpense > 0 && avgExpense > 0) {
     const deltaPct = ((predictedExpense - avgExpense) / avgExpense) * 100;

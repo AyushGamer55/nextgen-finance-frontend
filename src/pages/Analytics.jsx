@@ -91,7 +91,7 @@ const CategoryPressureTip = ({ active, payload, label }) => {
 
 const Analytics = () => {
   const { transactions, monthlyBarsForYear } = useFinance();
-  const { monthlyDataset, predictionSummary, currentFeatures, analytics } = useMlInsights();
+  const { allTimeDataset, predictionSummary, currentFeatures, analytics } = useMlInsights();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(String(currentYear));
   const [search, setSearch] = useState("");
@@ -130,27 +130,27 @@ const Analytics = () => {
   const hasActivity = useMemo(() => yearTx.some((tx) => parseTxDate(tx.date)), [yearTx]);
 
   const mlSeries = useMemo(() => {
-    const sourceRows = analytics?.monthlyBehaviorRows?.length ? analytics.monthlyBehaviorRows : (monthlyDataset || []);
+    const sourceRows = analytics?.monthlyBehaviorRows?.length ? analytics.monthlyBehaviorRows : (allTimeDataset || []);
     return sourceRows
       .filter((row) => String(row.month || "").startsWith(`${year}-`))
       .map((row) => ({
-        month: row.month?.slice(5) || row.month,
-        forecastExpense: Number(row.forecast_expense || row.total_expenses || row.expenses || 0),
+        month: row.month,
+        income: Number(row.total_income || 0),
+        expenses: Number(row.total_expenses || 0),
         savings: Number(row.savings || 0),
         healthScore: Number(row.health_score || row.financialHealthScore || 0),
-        discretionarySharePct: Number((row.discretionary_spending || row.discretionaryShare || 0) * 100),
-        recurringBurdenPct: Number((row.recurring_expense_burden || row.recurringExpenseBurden || 0) * 100),
         anomalyScorePct: Number((row.anomaly_score || row.anomalyScore || 0) * 100),
         estimated: Boolean(row.estimated),
       }));
-  }, [analytics, monthlyDataset, year]);
+  }, [analytics, allTimeDataset, year]);
 
   const nextMonthForecast = Number(predictionSummary?.predicted_expense || 0);
   const riskLabel = String(predictionSummary?.overspending_risk || "Unknown");
   const riskTone = /high/i.test(riskLabel) ? "text-red-400" : /medium/i.test(riskLabel) ? "text-amber-400" : "text-emerald-500";
-  const healthScore = Number(predictionSummary?.monthly_health_score || currentFeatures?.financialHealthScore || 0);
-  const anomalyDetected = Boolean(predictionSummary?.anomaly_detected || currentFeatures?.anomaly);
-  const anomalyScore = Number(predictionSummary?.anomaly_score || currentFeatures?.anomalyScore || 0);
+  const healthScore = Number(predictionSummary?.health_score || currentFeatures?.financialHealthScore || 0);
+  // Remove confusing metrics
+  const anomalyDetected = false; // Always false since we removed this feature
+  const anomalyScore = 0; // Always 0 since we removed this feature
 
   const categoryPressureData = useMemo(() => {
     if (analytics?.categoryPressure?.length) {
@@ -266,13 +266,7 @@ const Analytics = () => {
             <p className="mt-1 text-2xl font-bold">{formatCurrency(nextMonthForecast)}</p>
             <p className="mt-2 text-xs text-muted-foreground">Derived from your real transaction behavior.</p>
           </div>
-          <div className="stat-card">
-            <p className="text-sm text-muted-foreground">Expense anomaly</p>
-            <p className={`mt-1 text-2xl font-bold ${anomalyDetected ? "text-red-400" : "text-emerald-500"}`}>
-              {anomalyDetected ? "Detected" : "Normal"}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">Score: {(anomalyScore * 100).toFixed(0)}%</p>
-          </div>
+          {/* Removed anomaly section - too confusing for users */}
         </div>
 
         <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">

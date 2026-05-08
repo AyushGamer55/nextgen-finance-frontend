@@ -95,7 +95,7 @@ export function MlInsightsProvider({ children }) {
     ml: analysis?.ml || null,
     predictionSummary: analysis?.predictionSummary || null,
     currentFeatures: analysis?.currentFeatures || null,
-    monthlyDataset: analysis?.monthlyDataset || [],
+    allTimeDataset: analysis?.allTimeDataset || [],
     analytics: analysis?.analytics || null,
     loading,
     error,

@@ -29,13 +29,22 @@ const Index = () => {
   const [modal, setModal] = useState(null);
   const { summary, transactions, refreshData } = useFinance();
   const { session } = useAuth();
-  const { predictionSummary, refreshInsights } = useMlInsights();
+  const { predictionSummary, currentFeatures, refreshInsights } = useMlInsights();
   const insights = useMemo(() => buildInsights(transactions), [transactions]);
   const aiHighlights = useMemo(
     () => buildAiHighlights({ predictionSummary, summary }),
     [predictionSummary, summary]
   );
-  const availableBalance = session?.balance ?? summary.netSavings;
+  
+  // Use backend ML data for accurate totals
+  const backendSummary = useMemo(() => ({
+    totalIncome: currentFeatures?.income || 0,
+    totalExpenses: currentFeatures?.expenses || 0,
+    netSavings: (currentFeatures?.income || 0) - (currentFeatures?.expenses || 0),
+  }), [currentFeatures]);
+  
+  const displaySummary = backendSummary.totalIncome > 0 ? backendSummary : summary;
+  const availableBalance = session?.balance ?? displaySummary.netSavings;
 
   // Auto-refresh dashboard data every 30 seconds
   useEffect(() => {
@@ -62,7 +71,7 @@ const Index = () => {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <StatCard
             title="Total Income"
-            amount={formatCurrency(summary.totalIncome)}
+            amount={formatCurrency(displaySummary.totalIncome)}
             change=""
             isPositive
             icon={<IndianRupee className="h-6 w-6 text-primary" />}
@@ -70,7 +79,7 @@ const Index = () => {
           />
           <StatCard
             title="Total Expenses"
-            amount={formatCurrency(summary.totalExpenses)}
+            amount={formatCurrency(displaySummary.totalExpenses)}
             change={spendingLabel}
             isPositive={spendingChange <= 0}
             icon={<TrendingDown className="h-6 w-6 text-secondary" />}
@@ -78,9 +87,9 @@ const Index = () => {
           />
           <StatCard
             title="Net Savings"
-            amount={formatCurrency(summary.netSavings)}
-            change={summary.netSavings >= 0 ? "Income exceeds spending" : "Spending exceeds income"}
-            isPositive={summary.netSavings >= 0}
+            amount={formatCurrency(displaySummary.netSavings)}
+            change={displaySummary.netSavings >= 0 ? "Income exceeds spending" : "Spending exceeds income"}
+            isPositive={displaySummary.netSavings >= 0}
             icon={<PiggyBank className="h-6 w-6 text-primary" />}
             iconBg="bg-primary/20"
           />

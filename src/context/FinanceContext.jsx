@@ -180,6 +180,7 @@ export function FinanceProvider({ children }) {
       monthlyBarsForYear,
       replaceTransactions,
       refreshTransactions,
+      refreshData: refreshTransactions, // Add alias for refreshData
       addTransaction,
       updateTransaction,
       deleteTransaction,
